@@ -720,6 +720,16 @@ struct ImGuiGroupData
     bool        EmitItem;
 };
 
+// Stacked data for PushHitTest()/PopHitTest()
+struct ImGuiHitTestData
+{
+    ImGuiHitTestCallback Callback;
+    void*                UserData;
+
+    ImGuiHitTestData()                                                      { Callback = NULL; UserData = NULL; }
+    ImGuiHitTestData(ImGuiHitTestCallback callback, void* user_data = NULL) { Callback = callback; UserData = user_data; }
+};
+
 // Simple column measurement, currently used for MenuItem() only.. This is very short-sighted/throw-away code and NOT a generic helper.
 struct IMGUI_API ImGuiMenuColumns
 {
@@ -909,6 +919,7 @@ struct ImGuiNextWindowData
     ImGuiCond                   PosCond;
     ImGuiCond                   SizeCond;
     ImGuiCond                   CollapsedCond;
+    bool                        WindowHitTest;
     ImVec2                      PosVal;
     ImVec2                      PosPivotVal;
     ImVec2                      SizeVal;
@@ -919,6 +930,7 @@ struct ImGuiNextWindowData
     void*                       SizeCallbackUserData;
     float                       BgAlphaVal;
     ImVec2                      MenuBarOffsetMinVal;    // *Always on* This is not exposed publicly, so we don't clear it.
+    ImGuiHitTestData            WindowHitTestVal;
 
     ImGuiNextWindowData()       { memset(this, 0, sizeof(*this)); }
     inline void ClearFlags()    { Flags = ImGuiNextWindowDataFlags_None; }
@@ -1415,9 +1427,11 @@ struct IMGUI_API ImGuiWindowTempData
     ImGuiItemFlags          ItemFlags;              // == ItemFlagsStack.back() [empty == ImGuiItemFlags_Default]
     float                   ItemWidth;              // == ItemWidthStack.back(). 0.0: default, >0.0: width in pixels, <0.0: align xx pixels to the right of window
     float                   TextWrapPos;            // == TextWrapPosStack.back() [empty == -1.0f]
+    ImGuiHitTestData        HitTest;
     ImVector<ImGuiItemFlags>ItemFlagsStack;
     ImVector<float>         ItemWidthStack;
     ImVector<float>         TextWrapPosStack;
+    ImVector<ImGuiHitTestData> HitTestStack;
     ImVector<ImGuiGroupData>GroupStack;
     short                   StackSizesBackup[7];    // Store size of various stacks for asserting
 
@@ -1450,6 +1464,9 @@ struct IMGUI_API ImGuiWindowTempData
         CurrentLayoutItem = NULL;
 
         FocusCounterAll = FocusCounterTab = -1;
+
+        HitTest.Callback = NULL;
+        HitTest.UserData = NULL;
 
         ItemFlags = ImGuiItemFlags_Default_;
         ItemWidth = 0.0f;
@@ -1511,6 +1528,7 @@ struct IMGUI_API ImGuiWindow
     ImGuiCond               SetWindowCollapsedAllowFlags;       // store acceptable condition flags for SetNextWindowCollapsed() use.
     ImVec2                  SetWindowPosVal;                    // store window position when using a non-zero Pivot (position set needs to be processed when we know the window size)
     ImVec2                  SetWindowPosPivot;                  // store window pivot for positioning. ImVec2(0,0) when positioning from top-left corner; ImVec2(0.5f,0.5f) for centering; ImVec2(1,1) for bottom right.
+    ImGuiHitTestData        WindowHitTest;
 
     ImVector<ImGuiID>       IDStack;                            // ID stack. ID are hashes seeded with the value at the top of the stack. (In theory this should be in the TempData structure)
     ImGuiWindowTempData     DC;                                 // Temporary per-window data, reset at the beginning of the frame. This used to be called ImGuiDrawContext, hence the "DC" variable name.
