@@ -2259,7 +2259,9 @@ void ImGui::CalcListClipping(int items_count, float items_height, int* out_items
     // We create the union of the ClipRect and the NavScoringRect which at worst should be 1 page away from ClipRect
     ImRect unclipped_rect = window->ClipRect;
     if (g.NavMoveRequest)
-        unclipped_rect.Add(g.NavScoringRectScreen);
+        unclipped_rect.Add(g.NavScoringRect);
+    if (g.NavJustMovedToId && window->NavLastIds[0] == g.NavJustMovedToId)
+        unclipped_rect.Add(ImRect(window->Pos + window->NavRectRel[0].Min, window->Pos + window->NavRectRel[0].Max));
 
     const ImVec2 pos = window->DC.CursorPos;
     int start = (int)((unclipped_rect.Min.y - pos.y) / items_height);
@@ -3216,7 +3218,7 @@ bool ImGui::IsClippedEx(const ImRect& bb, ImGuiID id, bool clip_even_when_logged
     ImGuiContext& g = *GImGui;
     ImGuiWindow* window = g.CurrentWindow;
     if (!bb.Overlaps(window->ClipRect))
-        if (id == 0 || id != g.ActiveId)
+        if (id == 0 || (id != g.ActiveId && id != g.NavId))
             if (clip_even_when_logged || !g.LogEnabled)
                 return true;
     return false;
@@ -3751,7 +3753,7 @@ void ImGui::UpdateHoveredWindowAndCaptureFlags()
     g.IO.WantTextInput = (g.WantTextInputNextFrame != -1) ? (g.WantTextInputNextFrame != 0) : false;
 }
 
-static ImGuiKeyModFlags GetMergedKeyModFlags()
+ImGuiKeyModFlags ImGui::GetMergedKeyModFlags()
 {
     ImGuiContext& g = *GImGui;
     ImGuiKeyModFlags key_mod_flags = ImGuiKeyModFlags_None;
@@ -8110,7 +8112,7 @@ static bool ImGui::NavScoreItem(ImGuiNavMoveResult* result, ImRect cand)
     if (g.NavLayer != window->DC.NavLayerCurrent)
         return false;
 
-    const ImRect& curr = g.NavScoringRectScreen; // Current modified source rect (NB: we've applied Max.x = Min.x in NavUpdate() to inhibit the effect of having varied item width)
+    const ImRect& curr = g.NavScoringRect; // Current modified source rect (NB: we've applied Max.x = Min.x in NavUpdate() to inhibit the effect of having varied item width)
     g.NavScoringCount++;
 
     // When entering through a NavFlattened border, we consider child window items as fully clipped for scoring
@@ -8691,6 +8693,7 @@ static void ImGui::NavUpdate()
     if (g.NavMoveDir != ImGuiDir_None)
     {
         g.NavMoveRequest = true;
+        g.NavMoveRequestKeyMods = g.IO.KeyMods;
         g.NavMoveDirLast = g.NavMoveDir;
     }
     if (g.NavMoveRequest && g.NavId == 0)
@@ -8754,11 +8757,11 @@ static void ImGui::NavUpdate()
 
     // For scoring we use a single segment on the left side our current item bounding box (not touching the edge to avoid box overlap with zero-spaced items)
     ImRect nav_rect_rel = (g.NavWindow && !g.NavWindow->NavRectRel[g.NavLayer].IsInverted()) ? g.NavWindow->NavRectRel[g.NavLayer] : ImRect(0,0,0,0);
-    g.NavScoringRectScreen = g.NavWindow ? ImRect(g.NavWindow->Pos + nav_rect_rel.Min, g.NavWindow->Pos + nav_rect_rel.Max) : GetViewportRect();
-    g.NavScoringRectScreen.TranslateY(nav_scoring_rect_offset_y);
-    g.NavScoringRectScreen.Min.x = ImMin(g.NavScoringRectScreen.Min.x + 1.0f, g.NavScoringRectScreen.Max.x);
-    g.NavScoringRectScreen.Max.x = g.NavScoringRectScreen.Min.x;
-    IM_ASSERT(!g.NavScoringRectScreen.IsInverted()); // Ensure if we have a finite, non-inverted bounding box here will allows us to remove extraneous ImFabs() calls in NavScoreItem().
+    g.NavScoringRect = g.NavWindow ? ImRect(g.NavWindow->Pos + nav_rect_rel.Min, g.NavWindow->Pos + nav_rect_rel.Max) : GetViewportRect();
+    g.NavScoringRect.TranslateY(nav_scoring_rect_offset_y);
+    g.NavScoringRect.Min.x = ImMin(g.NavScoringRect.Min.x + 1.0f, g.NavScoringRect.Max.x);
+    g.NavScoringRect.Max.x = g.NavScoringRect.Min.x;
+    IM_ASSERT(!g.NavScoringRect.IsInverted()); // Ensure if we have a finite, non-inverted bounding box here will allows us to remove extraneous ImFabs() calls in NavScoreItem().
     //GetForegroundDrawList()->AddRect(g.NavScoringRectScreen.Min, g.NavScoringRectScreen.Max, IM_COL32(255,200,0,255)); // [DEBUG]
     g.NavScoringCount = 0;
 #if IMGUI_DEBUG_NAV_RECTS
@@ -8828,7 +8831,7 @@ static void ImGui::NavUpdateMoveResult()
         // Don't set NavJustMovedToId if just landed on the same spot (which may happen with ImGuiNavMoveFlags_AllowCurrentNavId)
         g.NavJustMovedToId = result->ID;
         g.NavJustMovedToFocusScopeId = result->FocusScopeId;
-
+        g.NavJustMovedToKeyMods = g.NavMoveRequestKeyMods;
     }
     SetNavIDWithRectRel(result->ID, g.NavLayer, result->FocusScopeId, result->RectRel);
     g.NavMoveFromClampedRefRect = false;
