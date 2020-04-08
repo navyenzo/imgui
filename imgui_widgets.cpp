@@ -9037,7 +9037,7 @@ void    ImGui::TableDrawMergeChannels(ImGuiTable* table)
             memcpy(dst_tmp++, channel, sizeof(ImDrawChannel));
             remaining_count--;
         }
-        IM_ASSERT(dst_tmp == g.DrawChannelsTempMergeBuffer.Data + g.DrawChannelsTempMergeBuffer.Size);
+        //IM_ASSERT(dst_tmp == g.DrawChannelsTempMergeBuffer.Data + g.DrawChannelsTempMergeBuffer.Size);
         memcpy(splitter->_Channels.Data + 1, g.DrawChannelsTempMergeBuffer.Data, (splitter->_Count - 1) * sizeof(ImDrawChannel));
     }
 
